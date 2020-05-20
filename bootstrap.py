@@ -136,6 +136,7 @@ if __name__ == '__main__':
 
     factory_instance = Houdini(args)
     try:
-        asyncio.run(factory_instance.start())
+        asyncio.get_event_loop().run_until_complete(factory_instance.start())
+        asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         logger.info('Shutting down...')
