@@ -89,7 +89,6 @@ class Spheniscidae:
     async def __handle_xt_data(self, data):
         self.logger.debug(f'Received XT data: {data}')
         parsed_data = data.split('%')[1:-1]
-
         packet_id = parsed_data[2]
         packet = XTPacket(packet_id, ext=parsed_data[1])
 
@@ -98,7 +97,7 @@ class Spheniscidae:
             packet_data = parsed_data[4:]
 
             for listener in xt_listeners:
-                if not self.__writer.is_closing() and listener.client_type is None \
+                if not self.transport.closed and listener.client_type is None \
                         or listener.client_type == self.client_type:
                     await listener(self, packet_data)
             self.received_packets.add(packet)

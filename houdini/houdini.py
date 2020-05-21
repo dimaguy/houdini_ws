@@ -90,7 +90,6 @@ class Houdini:
         self.match_making = None
         self.water_match_making = None
         self.fire_match_making = None
-        self.websocket_loop = asyncio.new_event_loop()
         self.puck = (0, 0)
 
     async def start(self):
