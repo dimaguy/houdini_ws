@@ -36,7 +36,7 @@
     />
   </a>
 </p>
-
+<b> This is an experimental version of houdini-async that uses a websocket server rather then a traditional socket server for future HTML5 clients</b>
 <p align="center">A lightning-fast Club Penguin Private Server written in Python 3.</p>
 
 - [Join our community](https://solero.me)
