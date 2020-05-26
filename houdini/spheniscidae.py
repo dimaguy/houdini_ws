@@ -78,8 +78,9 @@ class Spheniscidae:
         await self.send_line(xml_data.decode('utf-8'))
 
     async def send_line(self, data):
-        self.logger.debug(f'Outgoing data: {data}')
-        await self.transport.send(data)
+        if not self.transport.closed:
+            self.logger.debug(f'Outgoing data: {data}')
+            await self.transport.send(data)
 
     async def close(self):
         await self.transport.close(code=1000, reason="")
