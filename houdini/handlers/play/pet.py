@@ -12,7 +12,7 @@ from houdini.data.pet import PenguinPuffle, PenguinPuffleCollection, PenguinPuff
 from houdini.data.room import PenguinBackyardRoom, PenguinIglooRoom
 from houdini.handlers import Priority, XMLPacket, XTPacket
 
-PuffleKillerInterval = 600
+PuffleKillerInterval = 1800
 LegacyPuffleIds = [0, 1, 2, 3, 4, 5, 6, 7, 8]
 
 BrushCareItemId = 1
@@ -209,7 +209,7 @@ def get_my_player_walking_puffle(p):
         puffle = p.puffles[p.walking]
         parent_id, puffle_id = get_client_puffle_id(p, puffle.puffle_id)
         return f'{puffle.id}|{parent_id}|{puffle_id}|{puffle.hat or 0}|0'
-    return str()
+    return '||||'
 
 
 def check_name(p, puffle_name):
@@ -230,6 +230,8 @@ async def puffles_load(server):
     server.puffle_food_treasure = await PuffleTreasurePuffleItem.query.gino.all()
     server.puffle_furniture_treasure = await PuffleTreasureFurniture.query.gino.all()
     server.puffle_clothing_treasure = await PuffleTreasureItem.query.gino.all()
+
+    server.puffle_killer = asyncio.create_task(decrease_stats(server))
 
 
 @handlers.handler(XMLPacket('login'), priority=Priority.Low)
@@ -649,8 +651,8 @@ async def handle_set_puffle_handler(p):
 
 @handlers.handler(XTPacket('p', 'puphi'), client=ClientType.Vanilla)
 async def handle_puffle_visitor_hat_update(p, puffle: PenguinPuffle, hat_id: int):
-    if hat_id in p.puffle_items:
-        await puffle.update(hat=hat_id).apply()
+    if hat_id in p.puffle_items or hat_id == 0:
+        await puffle.update(hat=hat_id if hat_id > 0 else None).apply()
         await p.room.send_xt('puphi', puffle.id, hat_id)
 
 
@@ -708,7 +710,7 @@ async def handle_care_station_menu_choice(p, item_id: int):
 
 
 @handlers.handler(XTPacket('p', 'puffledig'), client=ClientType.Vanilla)
-@handlers.cooldown(119)
+@handlers.cooldown(60)
 async def handle_puffle_dig(p):
     await dig(p)
 

@@ -99,18 +99,12 @@ async def save_igloo_furniture(p, furniture_list=None):
             furniture_id, x, y, rotation, frame = map(int, furniture_string.split('|'))
 
             if furniture_id not in p.furniture:
-                return
+                return False
 
-            if furniture_id not in furniture_tracker:
-                furniture_tracker[furniture_id] = 0
-            else:
-                furniture_tracker[furniture_id] += 1
+            furniture_tracker[furniture_id] = furniture_tracker.get(furniture_id, 0) + 1
 
             if furniture_tracker[furniture_id] > p.furniture[furniture_id].quantity:
-                return
-
-            if not (0 <= x <= 700 and 0 <= y <= 700 and 1 <= rotation <= 8 and 1 <= frame <= 10):
-                return
+                return False
 
             furniture.append({
                 'igloo_id': p.igloo,
@@ -121,6 +115,7 @@ async def save_igloo_furniture(p, furniture_list=None):
             })
 
         await IglooFurniture.insert().values(furniture).gino.status()
+    return True
 
 
 @handlers.boot
@@ -280,38 +275,40 @@ async def handle_update_igloo_configuration(p, igloo_id: int, igloo_type_id: int
         p.server.igloos_by_penguin_id[p.id] = igloo
 
         furniture_list = furniture_data.split(',') if furniture_data else None
-        await save_igloo_furniture(p, furniture_list)
+        save_res = await save_igloo_furniture(p, furniture_list)
 
-        if not igloo_type_id or igloo_type_id in p.igloos\
-                and not flooring_id or flooring_id in p.flooring\
-                and not location_id or location_id in p.locations:
-            await igloo.update(
-                type=igloo_type_id,
-                flooring=flooring_id,
-                location=location_id,
-                music=music_id
-            ).apply()
+        if save_res:
+            if not igloo_type_id or igloo_type_id in p.igloos\
+                    and not flooring_id or flooring_id in p.flooring\
+                    and not location_id or location_id in p.locations:
+                await igloo.update(
+                    type=igloo_type_id,
+                    flooring=flooring_id,
+                    location=location_id,
+                    music=music_id
+                ).apply()
 
-        like_count = p.server.cache.get(f'layout_like_count.{igloo.id}')
-        like_count = await get_layout_like_count(igloo.id) if like_count is None else like_count
-        p.server.cache.set(f'layout_like_count.{igloo.id}', like_count)
-        active_igloo_string = f'{igloo.id}:1:0:{int(igloo.locked)}:{igloo.music}:{igloo.flooring}:' \
-                              f'{igloo.location}:{igloo.type}:{like_count}:{furniture_data}'
-        await p.room.send_xt('uvi', p.id, active_igloo_string)
+            like_count = p.server.cache.get(f'layout_like_count.{igloo.id}')
+            like_count = await get_layout_like_count(igloo.id) if like_count is None else like_count
+            p.server.cache.set(f'layout_like_count.{igloo.id}', like_count)
+            active_igloo_string = f'{igloo.id}:1:0:{int(igloo.locked)}:{igloo.music}:{igloo.flooring}:' \
+                                  f'{igloo.location}:{igloo.type}:{like_count}:{furniture_data}'
+            await p.room.send_xt('uvi', p.id, active_igloo_string)
 
-        p.server.cache.set(f'layout_furniture.{igloo.id}', furniture_data)
-        p.server.cache.set(f'active_igloo.{p.id}', active_igloo_string)
-        p.server.cache.delete(f'legacy_igloo.{p.id}')
-        p.server.cache.delete(f'igloo_layouts.{p.id}')
+            p.server.cache.set(f'layout_furniture.{igloo.id}', furniture_data)
+            p.server.cache.set(f'active_igloo.{p.id}', active_igloo_string)
+            p.server.cache.delete(f'legacy_igloo.{p.id}')
+            p.server.cache.delete(f'igloo_layouts.{p.id}')
 
 
 @handlers.handler(XTPacket('g', 'ur'), client=ClientType.Legacy)
 @handlers.cooldown(1)
 async def handle_save_igloo_furniture(p, *furniture_data):
-    await save_igloo_furniture(p, furniture_data)
+    save_res = await save_igloo_furniture(p, furniture_data)
 
-    p.server.cache.set(f'layout_furniture.{p.igloo}', ','.join(furniture_data))
-    p.server.cache.delete(f'legacy_igloo.{p.id}')
+    if save_res:
+        p.server.cache.set(f'layout_furniture.{p.igloo}', ','.join(furniture_data))
+        p.server.cache.delete(f'legacy_igloo.{p.id}')
 
 
 _slot_converter = SeparatorConverter(separator=',', mapper=str)
@@ -545,7 +542,7 @@ async def handle_like_igloo(p):
         like_insert = like_insert.on_conflict_do_update(
             constraint='igloo_like_pkey',
             set_=dict(count=IglooLike.count + 1, date=datetime.now()),
-            where=(IglooLike.date < datetime.today())
+            where=IglooLike.date < datetime.combine(datetime.today(), datetime.min.time())
         )
         like_count = await like_insert.gino.scalar()
 
@@ -565,9 +562,10 @@ async def handle_get_furniture_inventory(p):
 
 
 @handlers.handler(XTPacket('g', 'ggd'), client=ClientType.Vanilla)
-async def handle_get_dj3k_track(p, penguin_id: int, game_index: str):
+async def handle_get_dj3k_track(p, penguin_id: str, game_index: str):
+    pid = int(penguin_id) if penguin_id.isdigit() else p.id
     room_id, index = game_index.split('|')
-    game_data = await PenguinGameData.select('data').where((PenguinGameData.penguin_id == penguin_id) &
+    game_data = await PenguinGameData.select('data').where((PenguinGameData.penguin_id == pid) &
                                                            (PenguinGameData.room_id == int(room_id)) &
                                                            (PenguinGameData.index == int(index))).gino.scalar()
     await p.send_xt('ggd', game_data or '')

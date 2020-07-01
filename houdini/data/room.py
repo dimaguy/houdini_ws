@@ -1,3 +1,5 @@
+import random
+
 from houdini.data import AbstractDataCollection, db
 
 
@@ -20,6 +22,9 @@ class RoomMixin:
         self.tables = {}
         self.waddles = {}
 
+        self.id = None
+        self.max_users = None
+
     async def add_penguin(self, p):
         if len(self.penguins_by_id) >= self.max_users and not p.moderator:
             return await p.send_error(210)
@@ -32,6 +37,12 @@ class RoomMixin:
         if p.character:
             self.penguins_by_character_id[p.character] = p
 
+        player_positions = {(penguin.x, penguin.y) for penguin in self.penguins_by_id.values()}
+        free_positions = [(tx, ty) for tx in range(p.x - self.max_users // 4, p.x + self.max_users // 4)
+                          for ty in range(p.y - self.max_users // 4, p.y + self.max_users // 4)
+                          if (tx, ty) not in player_positions]
+
+        p.x, p.y = random.choice(free_positions)
         p.room = self
 
     async def remove_penguin(self, p):
@@ -90,7 +101,8 @@ class PenguinBackyardRoom(RoomMixin):
         p.toy = None
 
     async def send_xt(self, *data, f=None):
-        await self.penguin.send_xt(*data)
+        if f is None or f(self.penguin):
+            await self.penguin.send_xt(*data)
 
 
 class Room(db.Model, RoomMixin):
@@ -109,8 +121,8 @@ class Room(db.Model, RoomMixin):
     stamp_group = db.Column(db.ForeignKey('stamp_group.id', ondelete='CASCADE', onupdate='CASCADE'))
 
     def __init__(self, *args, **kwargs):
-        RoomMixin.__init__(self, *args, **kwargs)
         super().__init__(*args, **kwargs)
+        RoomMixin.__init__(self, *args, **kwargs)
 
         self.blackhole_penguins = {}
 
@@ -161,8 +173,10 @@ class PenguinIglooRoom(db.Model, RoomMixin):
     stamp_group = None
 
     def __init__(self, *args, **kwargs):
-        RoomMixin.__init__(self, *args, **kwargs)
         super().__init__(*args, **kwargs)
+        RoomMixin.__init__(self, *args, **kwargs)
+
+        self.max_users = 80
 
     @property
     def external_id(self):

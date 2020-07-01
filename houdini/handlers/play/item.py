@@ -15,7 +15,7 @@ async def get_pin_string(p, player_id):
         inventory = await PenguinItemCollection.get_collection(player_id)
 
     def is_free_pin(pin):
-        p.server.items[pin].is_flag() and p.server.items[pin].cost == 0
+        return p.server.items[pin].is_flag() and p.server.items[pin].cost == 0
     free_pins = (p.server.items[pin] for pin in inventory.keys() if is_free_pin(pin))
     pins = sorted(free_pins, key=operator.attrgetter('release_date'))
 
@@ -32,7 +32,7 @@ async def get_awards_string(p, player_id):
         inventory = await PenguinItemCollection.get_collection(player_id)
 
     awards = [str(award) for award in inventory.keys() if p.server.items[award].is_award()]
-    return '%'.join(awards)
+    return '|'.join(awards)
 
 
 @handlers.boot
@@ -99,4 +99,4 @@ async def handle_query_player_awards(p, player_id: int):
     string = p.server.cache.get(f'awards.{player_id}')
     string = await get_awards_string(p, player_id) if string is None else string
     p.server.cache.set(f'awards.{player_id}', string)
-    await p.send_xt('qpa', string)
+    await p.send_xt('qpa', player_id, string)

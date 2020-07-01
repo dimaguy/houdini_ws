@@ -26,11 +26,6 @@ from houdini.handlers import XTListenerManager, XMLListenerManager, DummyEventLi
 from houdini.plugins import PluginManager
 from houdini.commands import CommandManager
 
-from houdini.handlers.play.player import server_heartbeat, server_egg_timer
-from houdini.handlers.play.pet import decrease_stats
-
-from houdini.handlers.play.music import SoundStudio
-
 
 class Houdini:
 

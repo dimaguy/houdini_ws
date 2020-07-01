@@ -1,10 +1,10 @@
-from asyncio import CancelledError, IncompleteReadError
+from asyncio import CancelledError, IncompleteReadError, LimitOverrunError
 from xml.etree.cElementTree import Element, SubElement, tostring
 import websockets
 import defusedxml.cElementTree as Et
 
 from houdini.constants import ClientType
-from houdini.handlers import AuthorityError, XMLPacket, XTPacket
+from houdini.handlers import AuthorityError, AbortHandlerChain, XMLPacket, XTPacket
 
 
 class Spheniscidae:
@@ -144,10 +144,11 @@ class Spheniscidae:
         await self.server.dummy_event_listeners.fire('connected', self)
 
     async def _client_disconnected(self):
-        del self.server.peers_by_ip[self.peer_name]
-        self.logger.info(f'Client {self.peer_name} disconnected')
+        if self.peer_name in self.server.peers_by_ip:
+            del self.server.peers_by_ip[self.peer_name]
+            self.logger.info(f'Client {self.peer_name} disconnected')
 
-        await self.server.dummy_event_listeners.fire('disconnected', self)
+            await self.server.dummy_event_listeners.fire('disconnected', self)
 
     async def __data_received(self, data):
         try:
@@ -157,6 +158,8 @@ class Spheniscidae:
                 await self.__handle_xt_data(data)
         except AuthorityError:
             self.logger.debug(f'{self} tried to send game packet before authentication')
+        except AbortHandlerChain as e:
+            self.logger.info(f'Handler chain aborted: {str(e)}')
 
     async def run(self):
         await self._client_connected()
@@ -174,12 +177,13 @@ class Spheniscidae:
             except ConnectionResetError:
                 self.transport.close(code=1000, reason="")
             except websockets.exceptions.ConnectionClosedError:
-                pass
+                self.transport.close(code=1000, reason="")
+            except LimitOverrunError:
+                self.transport.close(code=1000, reason="")
             except BaseException as e:
                 self.logger.exception(e.__traceback__)
 
-        if self.peer_name in self.server.peers_by_ip:
-            await self._client_disconnected()
+        await self._client_disconnected()
 
     def __repr__(self):
         return f'<Spheniscidae {self.peer_name}>'

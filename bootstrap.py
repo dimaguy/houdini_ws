@@ -33,6 +33,8 @@ if __name__ == '__main__':
                              type=int)
     login_group.add_argument('--login-failure-timer', action='store', default=3600, help='Timeout after flood limit',
                              type=int)
+    login_group.add_argument('--preactivation-days', action='store', default=7, help='Preactivation trial days',
+                             type=int)
     login_group.add_argument('-S', '--staff', action='store_true', help='Staff-only server mode')
 
     logging_group = parser.add_argument_group('logging')
@@ -93,7 +95,7 @@ if __name__ == '__main__':
     games_group.add_argument('--max-coins', action='store',
                              default=1000000, type=int, help='Max coins earnable')
     games_group.add_argument('--max-coins-per-min', action='store',
-                             default=500, type=int, help='Max coins per min')
+                             default=800, type=int, help='Max coins per min')
 
     client_group = parser.add_argument_group('client')
     client_mode = client_group.add_mutually_exclusive_group()

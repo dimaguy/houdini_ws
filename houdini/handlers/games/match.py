@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from houdini import handlers
 from houdini.data.room import RoomWaddle
 from houdini.handlers import XTPacket
-from houdini.handlers.games.ninja.card import SenseiLogic, CardJitsuLogic, CardJitsuMatLogic
-from houdini.handlers.games.ninja.fire import FireSenseiLogic, CardJitsuFireLogic
-from houdini.handlers.games.ninja.water import WaterSenseiLogic, CardJitsuWaterLogic
+from houdini.handlers.games.ninja.card import CardJitsuLogic, CardJitsuMatLogic, SenseiLogic
+from houdini.handlers.games.ninja.fire import CardJitsuFireLogic, FireSenseiLogic
+from houdini.handlers.games.ninja.water import CardJitsuWaterLogic, WaterSenseiLogic
 from houdini.penguin import Penguin
 
 
@@ -96,6 +96,7 @@ def card_match(waddle_game):
 
         waddle_room = host.server.rooms[waddle_game.room_id]
         rw = RoomWaddle(id=host.id, room_id=waddle_room.id, seats=len(matched), game=waddle_game, temporary=True)
+        rw.penguins = [None] * rw.seats
         rw.room = waddle_room
         rw.logic = waddle_game
         waddle_room.waddles[rw.id] = rw
