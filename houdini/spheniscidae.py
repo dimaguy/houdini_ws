@@ -1,6 +1,6 @@
 from asyncio import CancelledError, IncompleteReadError, LimitOverrunError
 from xml.etree.cElementTree import Element, SubElement, tostring
-
+import websockets
 import defusedxml.cElementTree as Et
 
 from houdini.constants import ClientType
@@ -9,20 +9,19 @@ from houdini.handlers import AuthorityError, AbortHandlerChain, XMLPacket, XTPac
 
 class Spheniscidae:
 
-    __slots__ = ['__reader', '__writer', 'server', 'logger',
+    __slots__ = ['transport', 'path','server', 'logger',
                  'peer_name', 'received_packets', 'joined_world',
                  'client_type']
 
     Delimiter = b'\x00'
 
-    def __init__(self, server, reader, writer):
-        self.__reader = reader
-        self.__writer = writer
-
+    def __init__(self, server, connection, path):
+        self.transport = connection
+        self.path = path
         self.server = server
         self.logger = server.logger
 
-        self.peer_name = writer.get_extra_info('peername')
+        self.peer_name = self.transport.remote_address
         self.server.peers_by_ip[self.peer_name] = self
 
         self.joined_world = False
@@ -79,19 +78,18 @@ class Spheniscidae:
         await self.send_line(xml_data.decode('utf-8'))
 
     async def send_line(self, data):
-        if not self.__writer.is_closing():
+        if not self.transport.closed:
             self.logger.debug(f'Outgoing data: {data}')
-            self.__writer.write(data.encode('utf-8') + Spheniscidae.Delimiter)
+            await self.transport.send(data)
 
     async def close(self):
-        self.__writer.close()
+        await self.transport.close(code=1000, reason="")
 
         await self._client_disconnected()
 
     async def __handle_xt_data(self, data):
         self.logger.debug(f'Received XT data: {data}')
         parsed_data = data.split('%')[1:-1]
-
         packet_id = parsed_data[2]
         packet = XTPacket(packet_id, ext=parsed_data[1])
 
@@ -100,7 +98,7 @@ class Spheniscidae:
             packet_data = parsed_data[4:]
 
             for listener in xt_listeners:
-                if not self.__writer.is_closing() and listener.client_type is None \
+                if not self.transport.closed and listener.client_type is None \
                         or listener.client_type == self.client_type:
                     await listener(self, packet_data)
             self.received_packets.add(packet)
@@ -127,7 +125,7 @@ class Spheniscidae:
                     xml_listeners = self.server.xml_listeners[packet]
 
                     for listener in xml_listeners:
-                        if not self.__writer.is_closing() and listener.client_type is None \
+                        if not self.transport.closed and listener.client_type is None \
                                 or listener.client_type == self.client_type:
                             await listener(self, body_tag)
 
@@ -153,7 +151,6 @@ class Spheniscidae:
             await self.server.dummy_event_listeners.fire('disconnected', self)
 
     async def __data_received(self, data):
-        data = data.decode()[:-1]
         try:
             if data.startswith('<'):
                 await self.__handle_xml_data(data)
@@ -166,23 +163,23 @@ class Spheniscidae:
 
     async def run(self):
         await self._client_connected()
-        while not self.__writer.is_closing():
+        while not self.transport.closed:
             try:
-                data = await self.__reader.readuntil(
-                    separator=Spheniscidae.Delimiter)
+                data = await self.transport.recv()
                 if data:
                     await self.__data_received(data)
                 else:
-                    self.__writer.close()
-                await self.__writer.drain()
+                    self.transport.close()
             except IncompleteReadError:
-                self.__writer.close()
+                self.transport.close(code=1000, reason="")
             except CancelledError:
-                self.__writer.close()
+                self.transport.close(code=1000, reason="")
             except ConnectionResetError:
-                self.__writer.close()
+                self.transport.close(code=1000, reason="")
+            except websockets.exceptions.ConnectionClosedError:
+                self.transport.close(code=1000, reason="")
             except LimitOverrunError:
-                self.__writer.close()
+                self.transport.close(code=1000, reason="")
             except BaseException as e:
                 self.logger.exception(e.__traceback__)
 

@@ -3,10 +3,9 @@ import logging
 import os
 import sys
 from logging.handlers import RotatingFileHandler
-
 from redis import asyncio as aioredis
+import websockets
 from cacheout import Cache
-
 from houdini import PenguinStringCompiler
 from houdini.data import db
 from houdini.data.permission import PermissionCollection
@@ -85,7 +84,6 @@ class Houdini:
         self.match_making = None
         self.water_match_making = None
         self.fire_match_making = None
-
         self.puck = (0, 0)
 
     async def start(self):
@@ -118,11 +116,10 @@ class Houdini:
         self.logger.addHandler(universal_handler)
         self.logger.addHandler(console_handler)
         self.logger.addHandler(error_handler)
-
         level = logging.getLevelName(self.config.logging_level)
         self.logger.setLevel(level)
-
-        self.server = await asyncio.start_server(
+        
+        self.server = websockets.serve(
             self.client_connected, self.config.address,
             self.config.port
         )
@@ -171,9 +168,13 @@ class Houdini:
 
         await self.plugins.setup(houdini.plugins)
 
-        async with self.server:
-            await self.server.serve_forever()
+        self.heartbeat = asyncio.create_task(server_heartbeat(self))
+        self.egg_timer = asyncio.create_task(server_egg_timer(self))
+        self.puffle_killer = asyncio.create_task(decrease_stats(self))
 
-    async def client_connected(self, reader, writer):
-        client_object = self.client_class(self, reader, writer)
+        self.music = SoundStudio(self)
+        await self.server
+    async def client_connected(self, connection, path):
+        client_object = self.client_class(self, connection, path)
         await client_object.run()
+       
